@@ -3,28 +3,58 @@
 open Fabulous.Core
 open Fabulous.DynamicViews
 open Xamarin.Forms
+open System
 
 module App = 
-    type Todo = { Title: string; Description: string; }
-    type Model = { ToDos: Todo list }
+    type Todo = { Title: string; IsCompleted: bool}
+    type Model = { ToDos: Todo list; NewToDo: Todo }
     type Msg = 
         | AddToDo 
         | RemoveTodo 
-        | CompleteTodo
+        | CompletedChanged of int * bool
+        | TitleChanged of string * string
 
-    let initModel = { ToDos = List.Empty }
+    let emptyToDo = { Title = ""; IsCompleted = false }
+    let initModel = { ToDos = List.Empty; NewToDo = emptyToDo }
     let init () = initModel, Cmd.none
     let update msg model =
         match msg with
-        | AddToDo -> { model with ToDos = {Title="Title"; Description="Description"} :: model.ToDos }, Cmd.none
+        | AddToDo -> { ToDos = model.NewToDo :: model.ToDos; NewToDo = emptyToDo}, Cmd.none
+        | TitleChanged(_, newValue) -> 
+            { model with NewToDo = {Title = newValue; IsCompleted = false}}, Cmd.none
+        | CompletedChanged(selectedIndex, isCompleted) -> 
+            { model with ToDos = model.ToDos |> List.mapi (fun index todo -> 
+                         if index = selectedIndex then {todo with IsCompleted = isCompleted} else todo) }, Cmd.none
 
     let view (model: Model) dispatch =
         View.ContentPage(
-          content = View.StackLayout(padding = 10.0, verticalOptions = LayoutOptions.Center,
+          content = View.StackLayout(padding = 10.0, verticalOptions = LayoutOptions.Start,
             children = [ 
-                View.Label(text = "ToDo App", horizontalOptions = LayoutOptions.Center, widthRequest=200.0, horizontalTextAlignment=TextAlignment.Center);
-                View.Label(text = sprintf "%d" model.ToDos.Length, horizontalOptions = LayoutOptions.Center, widthRequest=200.0, horizontalTextAlignment=TextAlignment.Center)
-                View.Button(text = "Add", command = (fun () -> dispatch AddToDo), horizontalOptions = LayoutOptions.Start)
+                View.Label(text = "ToDo App",
+                    horizontalOptions = LayoutOptions.Center
+                    ,widthRequest = 200.0
+                    ,horizontalTextAlignment=TextAlignment.Center);
+                View.Entry(placeholder = "ToDo title"
+                    ,horizontalOptions = LayoutOptions.Center
+                    ,widthRequest = 200.0
+                    ,text = model.NewToDo.Title
+                    ,textChanged = debounce 250 (fun args -> dispatch (TitleChanged(args.OldTextValue, args.NewTextValue))))
+                View.Button(text = "Add"
+                    ,command = (fun () -> dispatch AddToDo)
+                    ,horizontalOptions = LayoutOptions.Start);
+                View.Label(text = sprintf "%d" model.ToDos.Length
+                    ,horizontalOptions = LayoutOptions.Center
+                    ,widthRequest = 200.0
+                    ,horizontalTextAlignment=TextAlignment.Center);
+                View.ListView(
+                    selectionMode = ListViewSelectionMode.None,
+                    items = (model.ToDos |> List.mapi (fun index todo -> View.StackLayout(
+                        orientation = StackOrientation.Horizontal,
+                        children = [
+                            View.Label(text=todo.Title, horizontalOptions = LayoutOptions.StartAndExpand)
+                            View.Switch(isToggled = todo.IsCompleted, toggled = (fun args -> dispatch (CompletedChanged(index, args.Value))))
+                      ])))
+                    )
             ]))
 
     // Note, this declaration is needed if you enable LiveUpdate
@@ -32,7 +62,6 @@ module App =
 
 type App () as app = 
     inherit Application ()
-
     let runner = 
         App.program
 #if DEBUG
@@ -40,16 +69,7 @@ type App () as app =
 #endif
         |> Program.runWithDynamicView app
 
-#if DEBUG
-    // Uncomment this line to enable live update in debug mode. 
-    // See https://fsprojects.github.io/Fabulous/tools.html for further  instructions.
-    //
-    do runner.EnableLiveUpdate()
-#endif    
 
-    // Uncomment this code to save the application state to app.Properties using Newtonsoft.Json
-    // See https://fsprojects.github.io/Fabulous/models.html for further  instructions.
-#if APPSAVE
     let modelId = "model"
     override __.OnSleep() = 
 
@@ -77,6 +97,5 @@ type App () as app =
     override this.OnStart() = 
         Console.WriteLine "OnStart: using same logic as OnResume()"
         this.OnResume()
-#endif
 
 
