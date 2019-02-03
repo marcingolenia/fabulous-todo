@@ -1,0 +1,11 @@
+obj
+bin
+*.bak
+.vs
+.fake
+packages
+paket-files
+*.dll
+
+build_output/
+.idea/
