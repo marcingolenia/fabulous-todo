@@ -6,11 +6,12 @@ open Xamarin.Forms
 open System
 
 module App = 
-    type Todo = { Title: string; IsCompleted: bool}
+    type Todo = { Title: string; IsCompleted: bool }
     type Model = { ToDos: Todo list; NewToDo: Todo }
     type Msg = 
         | AddToDo 
-        | RemoveTodo 
+        | SortToDos
+        | ClearCompletedToDos
         | CompletedChanged of int * bool
         | TitleChanged of string * string
 
@@ -19,29 +20,41 @@ module App =
     let init () = initModel, Cmd.none
     let update msg model =
         match msg with
-        | AddToDo -> { ToDos = model.NewToDo :: model.ToDos; NewToDo = emptyToDo}, Cmd.none
+        | AddToDo -> (if model.NewToDo.Title.Length > 1 
+                        then { ToDos = model.NewToDo :: model.ToDos; NewToDo = emptyToDo } 
+                        else model), Cmd.none
         | TitleChanged(_, newValue) -> 
             { model with NewToDo = {Title = newValue; IsCompleted = false}}, Cmd.none
         | CompletedChanged(selectedIndex, isCompleted) -> 
-            { model with ToDos = model.ToDos |> List.mapi (fun index todo -> 
-                         if index = selectedIndex then {todo with IsCompleted = isCompleted} else todo) }, Cmd.none
+            { model with ToDos = model.ToDos 
+                         |> List.mapi 
+                            (fun index todo -> if index = selectedIndex 
+                                               then {todo with IsCompleted = isCompleted} 
+                                               else todo)}, SortToDos 
+                                               |> Cmd.ofMsg
+        | ClearCompletedToDos -> 
+            { model with ToDos = model.ToDos |> List.filter (fun todo -> todo.IsCompleted = false)}, Cmd.none
+        | SortToDos -> { model with ToDos = model.ToDos |> List.sortBy(fun item -> item.IsCompleted)}, Cmd.none
 
     let view (model: Model) dispatch =
         View.ContentPage(
           content = View.StackLayout(padding = 10.0, verticalOptions = LayoutOptions.Start,
             children = [ 
-                View.Label(text = "ToDo App",
-                    horizontalOptions = LayoutOptions.Center
-                    ,widthRequest = 200.0
-                    ,horizontalTextAlignment=TextAlignment.Center);
                 View.Entry(placeholder = "ToDo title"
                     ,horizontalOptions = LayoutOptions.Center
                     ,widthRequest = 200.0
                     ,text = model.NewToDo.Title
                     ,textChanged = debounce 250 (fun args -> dispatch (TitleChanged(args.OldTextValue, args.NewTextValue))))
-                View.Button(text = "Add"
-                    ,command = (fun () -> dispatch AddToDo)
-                    ,horizontalOptions = LayoutOptions.Start);
+                View.StackLayout(orientation = StackOrientation.Horizontal
+                    ,children = [View.Button(text = "Add"
+                                ,command = (fun () -> dispatch AddToDo)
+                                ,isEnabled = (model.NewToDo.Title.Length > 0)
+                                ,horizontalOptions = LayoutOptions.Start);
+                                View.Button(text = "Clear completed"
+                                ,command = (fun() -> dispatch ClearCompletedToDos)
+                                ,horizontalOptions = LayoutOptions.End)
+                    ]
+                )
                 View.Label(text = sprintf "%d" model.ToDos.Length
                     ,horizontalOptions = LayoutOptions.Center
                     ,widthRequest = 200.0
@@ -56,7 +69,6 @@ module App =
                       ])))
                     )
             ]))
-
     // Note, this declaration is needed if you enable LiveUpdate
     let program = Program.mkProgram init update view
 
@@ -69,13 +81,10 @@ type App () as app =
 #endif
         |> Program.runWithDynamicView app
 
-
     let modelId = "model"
     override __.OnSleep() = 
-
         let json = Newtonsoft.Json.JsonConvert.SerializeObject(runner.CurrentModel)
         Console.WriteLine("OnSleep: saving model into app.Properties, json = {0}", json)
-
         app.Properties.[modelId] <- json
 
     override __.OnResume() = 
@@ -83,13 +92,10 @@ type App () as app =
         try 
             match app.Properties.TryGetValue modelId with
             | true, (:? string as json) -> 
-
                 Console.WriteLine("OnResume: restoring model from app.Properties, json = {0}", json)
                 let model = Newtonsoft.Json.JsonConvert.DeserializeObject<App.Model>(json)
-
                 Console.WriteLine("OnResume: restoring model from app.Properties, model = {0}", (sprintf "%0A" model))
                 runner.SetCurrentModel (model, Cmd.none)
-
             | _ -> ()
         with ex -> 
             App.program.onError("Error while restoring model found in app.Properties", ex)
