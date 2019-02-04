@@ -6,26 +6,26 @@ open Xamarin.Forms
 open System
 
 module App = 
-    type Todo = { Title: string; IsCompleted: bool }
-    type Model = { ToDos: Todo list; NewToDo: Todo }
+    type ToDo = { Title: string; IsCompleted: bool }
+    type Model = { ToDos: ToDo list; NewToDo: ToDo }
     type Msg = 
         | AddToDo 
         | SortToDos
         | ClearCompletedToDos
-        | CompletedChanged of int * bool
-        | TitleChanged of string * string
+        | ToDoCompletedChanged of int * bool
+        | ToDoTitleChanged of string * string
 
     let emptyToDo = { Title = ""; IsCompleted = false }
-    let initModel = { ToDos = List.Empty; NewToDo = emptyToDo }
-    let init () = initModel, Cmd.none
+    let initialModel = { ToDos = List.Empty; NewToDo = emptyToDo }
+    let init () = initialModel, Cmd.none
     let update msg model =
         match msg with
         | AddToDo -> (if model.NewToDo.Title.Length > 1 
                         then { ToDos = model.NewToDo :: model.ToDos; NewToDo = emptyToDo } 
                         else model), Cmd.none
-        | TitleChanged(_, newValue) -> 
+        | ToDoTitleChanged(_, newValue) -> 
             { model with NewToDo = {Title = newValue; IsCompleted = false}}, Cmd.none
-        | CompletedChanged(selectedIndex, isCompleted) -> 
+        | ToDoCompletedChanged(selectedIndex, isCompleted) -> 
             { model with ToDos = model.ToDos 
                          |> List.mapi 
                             (fun index todo -> if index = selectedIndex 
@@ -44,7 +44,7 @@ module App =
                     ,horizontalOptions = LayoutOptions.Center
                     ,widthRequest = 200.0
                     ,text = model.NewToDo.Title
-                    ,textChanged = debounce 250 (fun args -> dispatch (TitleChanged(args.OldTextValue, args.NewTextValue))))
+                    ,textChanged = debounce 250 (fun args -> dispatch (ToDoTitleChanged(args.OldTextValue, args.NewTextValue))))
                 View.StackLayout(orientation = StackOrientation.Horizontal
                     ,children = [View.Button(text = "Add"
                                 ,command = (fun () -> dispatch AddToDo)
@@ -65,7 +65,7 @@ module App =
                         orientation = StackOrientation.Horizontal,
                         children = [
                             View.Label(text=todo.Title, horizontalOptions = LayoutOptions.StartAndExpand)
-                            View.Switch(isToggled = todo.IsCompleted, toggled = (fun args -> dispatch (CompletedChanged(index, args.Value))))
+                            View.Switch(isToggled = todo.IsCompleted, toggled = (fun args -> dispatch (ToDoCompletedChanged(index, args.Value))))
                       ])))
                     )
             ]))
