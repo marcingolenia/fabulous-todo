@@ -44,16 +44,16 @@ module App =
                     ,horizontalOptions = LayoutOptions.Center
                     ,widthRequest = 200.0
                     ,text = model.NewToDo.Title
-                    ,textChanged = debounce 250 (fun args -> dispatch (ToDoTitleChanged(args.OldTextValue, args.NewTextValue))))
+                    ,textChanged = debounce 250 
+                        (fun args -> dispatch (ToDoTitleChanged(args.OldTextValue, args.NewTextValue))))
                 View.StackLayout(orientation = StackOrientation.Horizontal
-                    ,children = [View.Button(text = "Add"
-                                ,command = (fun () -> dispatch AddToDo)
-                                ,isEnabled = (model.NewToDo.Title.Length > 0)
-                                ,horizontalOptions = LayoutOptions.Start);
-                                View.Button(text = "Clear completed"
-                                ,command = (fun() -> dispatch ClearCompletedToDos)
-                                ,horizontalOptions = LayoutOptions.End)
-                    ]
+                    ,children = [ View.Button(text = "Add"
+                                 ,command = (fun () -> dispatch AddToDo)
+                                 ,isEnabled = (model.NewToDo.Title.Length > 0)
+                                 ,horizontalOptions = LayoutOptions.Start);
+                                 View.Button(text = "Clear completed"
+                                 ,command = (fun() -> dispatch ClearCompletedToDos)
+                                 ,horizontalOptions = LayoutOptions.End)]
                 )
                 View.Label(text = sprintf "%d" model.ToDos.Length
                     ,horizontalOptions = LayoutOptions.Center
@@ -65,7 +65,8 @@ module App =
                         orientation = StackOrientation.Horizontal,
                         children = [
                             View.Label(text=todo.Title, horizontalOptions = LayoutOptions.StartAndExpand)
-                            View.Switch(isToggled = todo.IsCompleted, toggled = (fun args -> dispatch (ToDoCompletedChanged(index, args.Value))))
+                            View.Switch(isToggled = todo.IsCompleted, toggled = 
+                                (fun args -> dispatch (ToDoCompletedChanged(index, args.Value))))
                       ])))
                     )
             ]))
@@ -81,27 +82,23 @@ type App () as app =
 #endif
         |> Program.runWithDynamicView app
 
-    let modelId = "model"
+    let [<Literal>] modelId = "model"
     override __.OnSleep() = 
         let json = Newtonsoft.Json.JsonConvert.SerializeObject(runner.CurrentModel)
         Console.WriteLine("OnSleep: saving model into app.Properties, json = {0}", json)
         app.Properties.[modelId] <- json
 
     override __.OnResume() = 
-        Console.WriteLine "OnResume: checking for model in app.Properties"
         try 
             match app.Properties.TryGetValue modelId with
             | true, (:? string as json) -> 
-                Console.WriteLine("OnResume: restoring model from app.Properties, json = {0}", json)
                 let model = Newtonsoft.Json.JsonConvert.DeserializeObject<App.Model>(json)
-                Console.WriteLine("OnResume: restoring model from app.Properties, model = {0}", (sprintf "%0A" model))
                 runner.SetCurrentModel (model, Cmd.none)
             | _ -> ()
         with ex -> 
             App.program.onError("Error while restoring model found in app.Properties", ex)
 
     override this.OnStart() = 
-        Console.WriteLine "OnStart: using same logic as OnResume()"
         this.OnResume()
 
 
